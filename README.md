@@ -8,8 +8,8 @@ Built entirely through conversational AI pair programming with Claude.
 
 - **Create workouts** - Define exercises with sets, reps, rest time, and optional weight (per-exercise or per-set)
 - **Drag-to-reorder** - Grab the grip handle to rearrange exercises with smooth animations
-- **Exercise types** - Regular, Warm-up, and Cool-down with visual badges
-- **Train mode** - Start any workout, track sets with dot indicators, skip exercises if machines are busy
+- **Workout items** - Add either exercise blocks or manual-start timer blocks
+- **Train mode** - Start any workout, track sets with dot indicators, and manually start timers when you reach them
 - **Rest timer** - Circular countdown between sets with skip option
 - **Undo** - 8-second window to undo an accidental set completion
 - **Workout history** - View past workouts with date, duration, exercises, weights, and completion status

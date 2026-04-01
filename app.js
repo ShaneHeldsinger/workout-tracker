@@ -25,11 +25,31 @@ const dom = {
   exDots: $('#ex-dots'), exInfo: $('#ex-info'),
   viewExercise: $('#view-exercise'), viewRest: $('#view-rest'),
   ringFg: $('#ring-fg'), restCountdown: $('#rest-countdown'), restNext: $('#rest-next'),
+  restLabel: $('#rest-label'),
   drawerList: $('#drawer-list'),
   doneTime: $('#done-time'), doneSummary: $('#done-summary'),
   confirm: $('#confirm'), confirmMsg: $('#confirm-msg'),
   nav: $('#nav'),
 };
+
+function normalizeExercise(ex) {
+  const next = { ...defaultExercise(), ...ex };
+  if (next.type === 'warmup' || next.type === 'cooldown' || next.type === 'regular') next.type = 'exercise';
+  if (next.type !== 'exercise' && next.type !== 'timer') next.type = 'exercise';
+  if (next.type === 'timer') {
+    next.sets = 1;
+    next.reps = 1;
+    next.rest = 0;
+    next.weightMode = 'none';
+    next.weight = 0;
+    next.weights = [];
+    next.duration = Math.max(5, Number(next.duration || 60));
+    if (!next.name?.trim()) next.name = 'Timer';
+  } else {
+    next.duration = Math.max(5, Number(next.duration || 60));
+  }
+  return next;
+}
 
 /* ===== NAV ===== */
 let currentPage = 'workouts';
@@ -47,6 +67,8 @@ $$('.nav-btn').forEach(btn => {
 /* ===== WORKOUT LIST (combined Start + Edit + Delete) ===== */
 function renderWorkoutList() {
   workouts = loadWorkouts();
+  workouts.forEach(w => { w.exercises = (w.exercises || []).map(normalizeExercise); });
+  saveWorkouts(workouts);
   dom.emptyWorkouts.classList.toggle('hidden', workouts.length > 0);
   dom.workoutList.innerHTML = workouts.map(w => {
     const exCount = w.exercises.length;
@@ -58,7 +80,7 @@ function renderWorkoutList() {
           <svg width="18" height="18" viewBox="-1 -1 26 26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg>
         </button>
       </div>
-      <p class="w-card-meta">${exCount} exercise${exCount !== 1 ? 's' : ''}</p>
+      <p class="w-card-meta">${exCount} item${exCount !== 1 ? 's' : ''}</p>
       <button class="btn-start" data-id="${w.id}">Start Workout</button>
     </div>`;
   }).join('');
@@ -94,7 +116,11 @@ let editingId = null;
 let editorExercises = [];
 
 function defaultExercise() {
-  return { id: uid(), name: '', type: 'regular', sets: 3, reps: 10, rest: 60, weightMode: 'none', weight: 0, weights: [] };
+  return { id: uid(), name: '', type: 'exercise', sets: 3, reps: 10, rest: 60, duration: 60, weightMode: 'none', weight: 0, weights: [] };
+}
+
+function defaultTimer() {
+  return { ...defaultExercise(), name: 'Timer', type: 'timer', sets: 1, reps: 1, rest: 0, duration: 60, weightMode: 'none', weight: 0, weights: [] };
 }
 
 function openEditor(workout) {
@@ -102,7 +128,7 @@ function openEditor(workout) {
   dom.editorTitle.textContent = workout ? 'Edit Workout' : 'New Workout';
   dom.inpName.value = workout ? workout.name : '';
   editorExercises = workout
-    ? workout.exercises.map(e => ({ ...defaultExercise(), ...e }))
+    ? workout.exercises.map(normalizeExercise)
     : [];
   renderEditorExercises();
   dom.editor.classList.remove('hidden');
@@ -116,6 +142,7 @@ function closeEditor() {
 
 function renderEditorExercises() {
   dom.exList.innerHTML = editorExercises.map((ex, i) => {
+    const isTimer = ex.type === 'timer';
     // Ensure weights array matches sets count
     while (ex.weights.length < ex.sets) ex.weights.push(ex.weight || 0);
     if (ex.weights.length > ex.sets) ex.weights.length = ex.sets;
@@ -144,10 +171,16 @@ function renderEditorExercises() {
         <button class="btn-icon del" data-rm="${i}" aria-label="Remove">×</button>
       </div>
       <div class="type-row">
-        <button class="type-btn ${ex.type==='regular'?'active':''}" data-idx="${i}" data-type="regular">Regular</button>
-        <button class="type-btn ${ex.type==='warmup'?'active':''}" data-idx="${i}" data-type="warmup">Warm-up</button>
-        <button class="type-btn ${ex.type==='cooldown'?'active':''}" data-idx="${i}" data-type="cooldown">Cool-down</button>
+        <button class="type-btn ${ex.type==='exercise'?'active':''}" data-idx="${i}" data-type="exercise">Exercise</button>
+        <button class="type-btn ${ex.type==='timer'?'active':''}" data-idx="${i}" data-type="timer">Timer</button>
       </div>
+      ${isTimer ? `
+      <div class="num-row">
+        <div class="num-group"><label>Timer duration</label>
+          <div class="stepper"><button data-step="duration" data-idx="${i}" data-dir="-5">−</button><span>${ex.duration}s</span><button data-step="duration" data-idx="${i}" data-dir="5">+</button></div>
+        </div>
+      </div>
+      ` : `
       <div class="num-row">
         <div class="num-group"><label>Sets</label>
           <div class="stepper"><button data-step="sets" data-idx="${i}" data-dir="-1">−</button><span>${ex.sets}</span><button data-step="sets" data-idx="${i}" data-dir="1">+</button></div>
@@ -173,6 +206,7 @@ function renderEditorExercises() {
         </div>
         ${weightHTML}
       </div>
+      `}
     </div>`;
   }).join('');
 
@@ -188,12 +222,28 @@ function bindEditorEvents() {
     btn.addEventListener('click', () => { editorExercises.splice(+btn.dataset.rm, 1); renderEditorExercises(); });
   });
   el.querySelectorAll('.type-btn[data-type]').forEach(btn => {
-    btn.addEventListener('click', () => { editorExercises[+btn.dataset.idx].type = btn.dataset.type; renderEditorExercises(); });
+    btn.addEventListener('click', () => {
+      const ex = editorExercises[+btn.dataset.idx];
+      ex.type = btn.dataset.type;
+      if (ex.type === 'timer') {
+        ex.sets = 1;
+        ex.reps = 1;
+        ex.rest = 0;
+        ex.weightMode = 'none';
+        ex.weight = 0;
+        ex.weights = [];
+        ex.duration = Math.max(5, Number(ex.duration || 60));
+        if (!ex.name.trim()) ex.name = 'Timer';
+      }
+      renderEditorExercises();
+    });
   });
   el.querySelectorAll('[data-step]').forEach(btn => {
     btn.addEventListener('click', () => {
       const ex = editorExercises[+btn.dataset.idx];
-      ex[btn.dataset.step] = Math.max(1, ex[btn.dataset.step] + (+btn.dataset.dir));
+      const field = btn.dataset.step;
+      const min = field === 'duration' ? 5 : 1;
+      ex[field] = Math.max(min, ex[field] + (+btn.dataset.dir));
       renderEditorExercises();
     });
   });
@@ -392,11 +442,18 @@ $('#btn-add-ex').addEventListener('click', () => {
   dom.exList.lastElementChild?.scrollIntoView({ behavior: 'smooth' });
 });
 
+$('#btn-add-timer').addEventListener('click', () => {
+  editorExercises.push(defaultTimer());
+  renderEditorExercises();
+  dom.exList.lastElementChild?.scrollIntoView({ behavior: 'smooth' });
+});
+
 $('#btn-save').addEventListener('click', () => {
   const name = dom.inpName.value.trim();
   if (!name) { dom.inpName.focus(); dom.inpName.classList.add('shake'); setTimeout(() => dom.inpName.classList.remove('shake'), 400); return; }
   if (editorExercises.length === 0) { $('#btn-add-ex').classList.add('shake'); setTimeout(() => $('#btn-add-ex').classList.remove('shake'), 400); return; }
-  editorExercises.forEach(e => { if (!e.name.trim()) e.name = 'Untitled'; });
+  editorExercises = editorExercises.map(normalizeExercise);
+  editorExercises.forEach(e => { if (!e.name.trim()) e.name = e.type === 'timer' ? 'Timer' : 'Untitled'; });
 
   if (editingId) {
     const idx = workouts.findIndex(w => w.id === editingId);
@@ -423,10 +480,10 @@ function startSession(workoutId) {
     workout: w,
     startTime: Date.now(),
     exercises: w.exercises.map(e => ({
-      ...defaultExercise(), ...e,
+      ...normalizeExercise(e),
       completedSets: 0, done: false,
     })),
-    currentIdx: 0, resting: false, restEnd: 0, restDuration: 0,
+    currentIdx: 0, resting: false, restEnd: 0, restDuration: 0, restContext: null,
   };
 
   dom.nav.classList.add('hidden');
@@ -467,10 +524,11 @@ function getWeightForSet(ex, setIdx) {
 function renderSession() {
   if (!session) return;
   const ex = session.exercises[session.currentIdx];
+  const isTimer = ex.type === 'timer';
 
-  if (ex.type !== 'regular') {
-    dom.exBadge.textContent = ex.type === 'warmup' ? 'Warm-up' : 'Cool-down';
-    dom.exBadge.className = `badge ${ex.type}`;
+  if (isTimer) {
+    dom.exBadge.textContent = 'Timer';
+    dom.exBadge.className = 'badge timer';
     dom.exBadge.classList.remove('hidden');
   } else {
     dom.exBadge.classList.add('hidden');
@@ -479,9 +537,13 @@ function renderSession() {
   dom.exName.textContent = ex.name;
 
   // Info line with weight
-  const currentSetIdx = Math.min(ex.completedSets, ex.sets - 1);
-  const w = getWeightForSet(ex, currentSetIdx);
-  dom.exInfo.textContent = w > 0 ? `${ex.reps} reps @ ${w}kg` : `${ex.reps} reps per set`;
+  if (isTimer) {
+    dom.exInfo.textContent = `${ex.duration}s timer`;
+  } else {
+    const currentSetIdx = Math.min(ex.completedSets, ex.sets - 1);
+    const w = getWeightForSet(ex, currentSetIdx);
+    dom.exInfo.textContent = w > 0 ? `${ex.reps} reps @ ${w}kg` : `${ex.reps} reps per set`;
+  }
 
   // dots
   dom.exDots.innerHTML = '';
@@ -499,9 +561,13 @@ function renderSession() {
 
   const btn = $('#btn-done-set');
   if (ex.done) {
-    btn.textContent = 'Exercise Complete ✓';
+    btn.textContent = `${isTimer ? 'Timer' : 'Exercise'} Complete ✓`;
     btn.classList.add('resting');
     btn.disabled = true;
+  } else if (isTimer) {
+    btn.textContent = 'Start Timer';
+    btn.classList.remove('resting');
+    btn.disabled = false;
   } else {
     btn.textContent = `Complete Set ${ex.completedSets + 1}/${ex.sets}`;
     btn.classList.remove('resting');
@@ -511,13 +577,18 @@ function renderSession() {
 }
 
 function renderDrawer() {
-  dom.drawerList.innerHTML = session.exercises.map((ex, i) => `
+  dom.drawerList.innerHTML = session.exercises.map((ex, i) => {
+    const progress = ex.type === 'timer'
+      ? (ex.done ? 'Done' : `${ex.duration}s`)
+      : `${ex.completedSets}/${ex.sets}`;
+    return `
     <div class="d-item ${i === session.currentIdx ? 'current' : ''} ${ex.done ? 'done' : ''}" data-didx="${i}">
       <div class="d-check">${ex.done ? '✓' : i === session.currentIdx ? '▸' : ''}</div>
       <div class="d-label">${esc(ex.name)}</div>
-      <div class="d-progress">${ex.completedSets}/${ex.sets}</div>
+      <div class="d-progress">${progress}</div>
     </div>
-  `).join('');
+  `;
+  }).join('');
   dom.drawerList.querySelectorAll('.d-item').forEach(item => {
     item.addEventListener('click', () => {
       const idx = +item.dataset.didx;
@@ -568,6 +639,11 @@ $('#btn-done-set').addEventListener('click', () => {
   const ex = session.exercises[session.currentIdx];
   if (ex.done) return;
 
+  if (ex.type === 'timer') {
+    startRest(ex.duration, { mode: 'timer', autoComplete: true });
+    return;
+  }
+
   undoState = { exerciseIdx: session.currentIdx, prevCompletedSets: ex.completedSets, prevDone: ex.done, prevSessionIdx: session.currentIdx };
   ex.completedSets++;
   if (navigator.vibrate) navigator.vibrate(30);
@@ -586,16 +662,23 @@ $('#btn-done-set').addEventListener('click', () => {
 });
 
 /* ===== REST TIMER ===== */
-function startRest(seconds) {
+function startRest(seconds, options = {}) {
   if (!seconds || seconds <= 0) { renderSession(); return; }
+  const { mode = 'betweenSets', autoComplete = false } = options;
   session.resting = true;
   session.restEnd = Date.now() + seconds * 1000;
   session.restDuration = seconds;
+  session.restContext = { mode, autoComplete };
   dom.viewExercise.classList.add('hidden');
   dom.viewRest.classList.remove('hidden');
-
   const ex = session.exercises[session.currentIdx];
-  dom.restNext.textContent = `${ex.name} — set ${ex.completedSets + 1}/${ex.sets} next`;
+  if (mode === 'timer') {
+    dom.restLabel.textContent = 'TIMER';
+    dom.restNext.textContent = ex.name;
+  } else {
+    dom.restLabel.textContent = 'REST';
+    dom.restNext.textContent = `${ex.name} — set ${ex.completedSets + 1}/${ex.sets} next`;
+  }
 
   const C = 2 * Math.PI * 54;
   dom.ringFg.style.strokeDasharray = C;
@@ -605,19 +688,47 @@ function startRest(seconds) {
     const secs = Math.ceil(rem / 1000);
     dom.restCountdown.textContent = `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`;
     dom.ringFg.style.strokeDashoffset = C * (1 - rem / (session.restDuration * 1000));
-    if (rem <= 0) { stopRest(); if (navigator.vibrate) navigator.vibrate([50, 50, 50]); renderSession(); }
+    if (rem <= 0) {
+      const shouldCompleteTimer = session?.restContext?.mode === 'timer' && session?.restContext?.autoComplete;
+      stopRest();
+      if (navigator.vibrate) navigator.vibrate([50, 50, 50]);
+      if (shouldCompleteTimer) completeCurrentTimer();
+      else renderSession();
+    }
   }, 50);
 }
 
 function stopRest() {
   clearInterval(restInterval);
   if (session) session.resting = false;
+  if (session) session.restContext = null;
   dom.viewRest.classList.add('hidden');
   dom.viewExercise.classList.remove('hidden');
+  dom.restLabel.textContent = 'REST';
+  dom.restCountdown.textContent = '0:00';
   if (undoState) showUndo(true);
 }
 
-$('#btn-skip').addEventListener('click', () => { stopRest(); renderSession(); });
+function completeCurrentTimer() {
+  if (!session) return;
+  const ex = session.exercises[session.currentIdx];
+  if (!ex || ex.type !== 'timer' || ex.done) return;
+
+  ex.completedSets = ex.sets;
+  ex.done = true;
+  if (session.exercises.every(e => e.done)) { finishSession(); return; }
+
+  const nextIdx = session.exercises.findIndex((e, i) => i > session.currentIdx && !e.done);
+  session.currentIdx = nextIdx >= 0 ? nextIdx : session.exercises.findIndex(e => !e.done);
+  renderSession();
+}
+
+$('#btn-skip').addEventListener('click', () => {
+  const isTimerMode = session?.restContext?.mode === 'timer';
+  stopRest();
+  if (isTimerMode) completeCurrentTimer();
+  else renderSession();
+});
 
 $('#btn-toggle-drawer').addEventListener('click', () => {
   drawerOpen = !drawerOpen;
@@ -651,7 +762,7 @@ function finishSession() {
   requestAnimationFrame(() => dom.sessionDone.classList.add('visible'));
 
   dom.doneTime.textContent = fmtTime(elapsed);
-  dom.doneSummary.textContent = `${session.exercises.length} exercises · ${totalSets} sets`;
+  dom.doneSummary.textContent = `${session.exercises.length} items · ${totalSets} sets`;
   if (navigator.vibrate) navigator.vibrate([100, 80, 100]);
   session = null;
 
@@ -682,6 +793,7 @@ function addToHistory(completed) {
     exercises: session.exercises.map(e => ({
       name: e.name, type: e.type,
       completedSets: e.completedSets, totalSets: e.sets,
+      duration: e.duration,
       reps: e.reps,
       weightMode: e.weightMode, weight: e.weight, weights: e.weights,
     })),
@@ -702,11 +814,16 @@ function renderHistory() {
     const statusText = h.completed ? 'Complete' : 'Partial';
 
     const exerciseDetails = h.exercises.filter(e => e.completedSets > 0).map(e => {
-      let info = `${e.completedSets}×${e.reps}`;
-      if (e.weightMode === 'uniform' && e.weight > 0) info += ` @ ${e.weight}kg`;
-      else if (e.weightMode === 'perSet' && e.weights?.some(w => w > 0)) {
-        const unique = [...new Set(e.weights.slice(0, e.completedSets))];
-        info += unique.length === 1 ? ` @ ${unique[0]}kg` : ` @ ${unique.join('/')}kg`;
+      let info;
+      if (e.type === 'timer') {
+        info = `${Math.max(5, Number(e.duration || 60))}s timer`;
+      } else {
+        info = `${e.completedSets}×${e.reps}`;
+        if (e.weightMode === 'uniform' && e.weight > 0) info += ` @ ${e.weight}kg`;
+        else if (e.weightMode === 'perSet' && e.weights?.some(w => w > 0)) {
+          const unique = [...new Set(e.weights.slice(0, e.completedSets))];
+          info += unique.length === 1 ? ` @ ${unique[0]}kg` : ` @ ${unique.join('/')}kg`;
+        }
       }
       return `<div class="h-exercise"><span class="h-ex-name">${esc(e.name)}</span><span class="h-ex-info">${info}</span></div>`;
     }).join('');
@@ -724,7 +841,7 @@ function renderHistory() {
       </div>
       <div class="h-card-date">${dateStr} at ${timeStr}</div>
       <div class="h-card-meta">
-        <span>${h.totalExercises} exercise${h.totalExercises !== 1 ? 's' : ''}</span>
+        <span>${h.totalExercises} item${h.totalExercises !== 1 ? 's' : ''}</span>
         <span>·</span>
         <span>${h.totalSets} set${h.totalSets !== 1 ? 's' : ''}</span>
       </div>

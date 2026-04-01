@@ -64,7 +64,7 @@
           <button id="btn-done-set" class="btn-big">Complete Set</button>
         </div>
         <div id="view-rest" class="hidden">
-          <p class="rest-label">REST</p>
+          <p id="rest-label" class="rest-label">REST</p>
           <div class="ring-wrap">
             <svg viewBox="0 0 120 120"><circle class="ring-bg" cx="60" cy="60" r="54"/><circle id="ring-fg" class="ring-fg" cx="60" cy="60" r="54"/></svg>
             <span id="rest-countdown">0:00</span>
@@ -106,7 +106,10 @@
         <input type="text" id="inp-name" placeholder="e.g. Push Day" autocomplete="off">
         <div class="section-row">
           <h3>Exercises</h3>
-          <button id="btn-add-ex" class="btn-small">+ Add</button>
+          <div style="display:flex;gap:8px">
+            <button id="btn-add-ex" class="btn-small">+ Exercise</button>
+            <button id="btn-add-timer" class="btn-small">+ Timer</button>
+          </div>
         </div>
         <div id="ex-list"></div>
       </div>
