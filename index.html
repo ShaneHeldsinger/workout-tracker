@@ -32,7 +32,12 @@
 
     <!-- ========== HISTORY PAGE ========== -->
     <section id="page-history" class="page">
-      <header class="page-header"><h1>History</h1></header>
+      <header class="page-header">
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <h1>History</h1>
+          <button id="btn-clear-history" class="btn-text danger" style="font-size:14px">Clear All</button>
+        </div>
+      </header>
       <div class="page-body">
         <div id="history-list"></div>
         <div id="empty-history" class="empty">
@@ -117,6 +122,9 @@
         </div>
       </div>
     </div>
+
+    <!-- ========== TOAST ========== -->
+    <div id="toast" class="toast hidden"></div>
 
     <!-- ========== BOTTOM NAV ========== -->
     <nav id="nav">

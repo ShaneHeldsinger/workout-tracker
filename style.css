@@ -8,7 +8,7 @@
   --red:#f87171;--red-soft:rgba(248,113,113,.12);
   --orange:#fb923c;
   --radius:14px;--radius-sm:10px;
-  --nav-h:72px;
+  --nav-h:56px;
   --safe-b:env(safe-area-inset-bottom,0px);
   --safe-t:env(safe-area-inset-top,0px);
 }
@@ -211,6 +211,7 @@ button,label,.stepper,.nav-btn,.type-btn,.rest-btn,.d-item,.w-card,.h-card{-webk
 .h-card-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px}
 .h-card-header h3{font-size:16px;font-weight:600}
 .h-card-header .h-duration{font-size:15px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--accent)}
+.h-del{width:32px;height:32px}
 .h-card-date{color:var(--dim);font-size:13px;margin-bottom:4px}
 .h-card-meta{color:var(--dim);font-size:13px;display:flex;gap:6px}
 .h-card-details{overflow:hidden;transition:max-height .3s ease;max-height:0}
@@ -228,6 +229,12 @@ button,label,.stepper,.nav-btn,.type-btn,.rest-btn,.d-item,.w-card,.h-card{-webk
 .dialog{background:var(--surface2);border-radius:var(--radius);padding:24px;width:280px;text-align:center}
 .dialog p{font-size:15px;margin-bottom:20px}
 .dialog-actions{display:flex;justify-content:center;gap:12px}
+
+/* ===== TOAST ===== */
+.toast{position:fixed;bottom:calc(var(--nav-h) + var(--safe-b) + 16px);left:50%;transform:translateX(-50%) translateY(20px);background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 20px;font-size:14px;font-weight:500;z-index:400;opacity:0;transition:opacity .25s,transform .25s;pointer-events:none;white-space:nowrap}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.toast.error{border-color:var(--red);color:var(--red)}
+.toast.success{border-color:var(--green);color:var(--green)}
 
 /* ===== UTILITIES ===== */
 .hidden{display:none!important}

@@ -81,7 +81,9 @@ function renderWorkoutList() {
       confirmAction('Delete this workout?', () => {
         workouts = workouts.filter(w => w.id !== btn.dataset.del);
         saveWorkouts(workouts);
+
         renderWorkoutList();
+
       });
     });
   });
@@ -403,8 +405,10 @@ $('#btn-save').addEventListener('click', () => {
     workouts.push({ id: uid(), name, exercises: editorExercises, createdAt: Date.now() });
   }
   saveWorkouts(workouts);
+
   closeEditor();
   renderWorkoutList();
+
 });
 
 $('#btn-cancel').addEventListener('click', closeEditor);
@@ -625,8 +629,10 @@ $('#btn-toggle-drawer').addEventListener('click', () => {
 $('#btn-end').addEventListener('click', () => {
   confirmAction('End this workout?', () => {
     addToHistory(false);
+  
     closeSession();
     renderWorkoutList();
+  
   });
 });
 
@@ -638,6 +644,7 @@ function finishSession() {
 
   addToHistory(true);
 
+
   dom.session.classList.remove('visible');
   setTimeout(() => dom.session.classList.add('hidden'), 350);
   dom.sessionDone.classList.remove('hidden');
@@ -647,6 +654,7 @@ function finishSession() {
   dom.doneSummary.textContent = `${session.exercises.length} exercises · ${totalSets} sets`;
   if (navigator.vibrate) navigator.vibrate([100, 80, 100]);
   session = null;
+
 }
 
 $('#btn-finish').addEventListener('click', () => {
@@ -707,7 +715,12 @@ function renderHistory() {
     <div class="h-card" data-hid="${h.id}">
       <div class="h-card-header">
         <h3>${esc(h.workoutName)} <span class="h-card-status ${statusClass}">${statusText}</span></h3>
-        <span class="h-duration">${fmtTime(h.duration)}</span>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span class="h-duration">${fmtTime(h.duration)}</span>
+          <button class="btn-icon del h-del" data-hdel="${h.id}" aria-label="Delete">
+            <svg width="16" height="16" viewBox="-1 -1 26 26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg>
+          </button>
+        </div>
       </div>
       <div class="h-card-date">${dateStr} at ${timeStr}</div>
       <div class="h-card-meta">
@@ -721,12 +734,38 @@ function renderHistory() {
 
   // Tap to expand details
   dom.historyList.querySelectorAll('.h-card').forEach(card => {
-    card.addEventListener('click', () => {
-      const details = card.querySelector('.h-card-details');
-      details.classList.toggle('expanded');
+    card.addEventListener('click', (e) => {
+      if (e.target.closest('.h-del')) return;
+      card.querySelector('.h-card-details').classList.toggle('expanded');
     });
   });
+
+  // Delete individual history entries
+  dom.historyList.querySelectorAll('.h-del').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      confirmAction('Delete this entry?', () => {
+        const h = loadHistory().filter(x => x.id !== btn.dataset.hdel);
+        saveHistory(h);
+
+        renderHistory();
+
+      });
+    });
+  });
+
+  // Show/hide clear all button
+  $('#btn-clear-history').classList.toggle('hidden', history.length === 0);
 }
+
+$('#btn-clear-history').addEventListener('click', () => {
+  confirmAction('Clear all history?', () => {
+    saveHistory([]);
+  
+    renderHistory();
+  
+  });
+});
 
 /* ===== CONFIRM DIALOG ===== */
 let confirmCb = null;
@@ -743,6 +782,16 @@ function closeConfirm() {
 }
 $('#confirm-yes').addEventListener('click', () => { if (confirmCb) confirmCb(); closeConfirm(); });
 $('#confirm-no').addEventListener('click', closeConfirm);
+
+/* ===== TOAST ===== */
+let toastTimer = null;
+function showToast(msg, type = '') {
+  const t = $('#toast');
+  t.textContent = msg;
+  t.className = 'toast show' + (type ? ' ' + type : '');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.className = 'toast hidden', 3000);
+}
 
 /* ===== HELPERS ===== */
 function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
