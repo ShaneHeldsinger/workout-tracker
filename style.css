@@ -158,6 +158,15 @@ button,label,.stepper,.nav-btn,.type-btn,.rest-btn,.d-item,.w-card,.h-card{-webk
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
 
 #ex-info{margin-top:4px;margin-bottom:8px}
+.session-weight-toggle{font-size:13px;color:var(--dim);padding:6px 10px;min-height:30px;margin:0 auto 8px;display:block}
+.session-weight-toggle:active{background:var(--surface2)}
+.session-weight-editor{width:100%;max-width:320px;margin:0 auto 10px;padding:10px 10px 8px;border:1px solid var(--border);border-radius:10px;background:rgba(255,255,255,.02);text-align:left}
+.session-weight-editor .weight-mode-row{margin-bottom:8px}
+.session-weight-editor .type-btn{font-size:11px;min-height:34px;padding:7px 0}
+.session-weight-editor .weight-uniform .stepper,.session-weight-editor .weight-set-row .stepper{max-width:none}
+.session-weight-note{font-size:12px;margin:2px 0 0}
+.session-weight-editor .weight-perset{align-items:stretch}
+.session-weight-editor .weight-set-row{max-width:none;width:100%}
 
 .btn-big{width:100%;max-width:300px;padding:18px;border-radius:14px;font-size:17px;font-weight:700;background:var(--accent);color:#fff;margin-top:28px;margin-bottom:8px;box-shadow:0 4px 20px rgba(124,92,252,.3);transition:transform .15s,opacity .15s}
 .btn-big:active{transform:scale(.96)}

@@ -23,6 +23,8 @@ const dom = {
   sessionTimer: $('#session-timer'),
   exBadge: $('#ex-badge'), exName: $('#ex-name'),
   exDots: $('#ex-dots'), exInfo: $('#ex-info'),
+  btnWeightEditToggle: $('#btn-weight-edit-toggle'), sessionWeightEditor: $('#session-weight-editor'),
+  sessionWeightModes: $('#session-weight-modes'), sessionWeightControls: $('#session-weight-controls'),
   viewExercise: $('#view-exercise'), viewRest: $('#view-rest'),
   ringFg: $('#ring-fg'), restCountdown: $('#rest-countdown'), restNext: $('#rest-next'),
   restLabel: $('#rest-label'),
@@ -31,6 +33,8 @@ const dom = {
   confirm: $('#confirm'), confirmMsg: $('#confirm-msg'),
   nav: $('#nav'),
 };
+
+let sessionWeightEditorOpen = false;
 
 function normalizeExercise(ex) {
   const next = { ...defaultExercise(), ...ex };
@@ -100,7 +104,7 @@ function renderWorkoutList() {
   dom.workoutList.querySelectorAll('[data-del]').forEach(btn => {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
-      confirmAction('Delete this workout?', () => {
+      confirmAction('Are you sure you want to delete this workout?', () => {
         workouts = workouts.filter(w => w.id !== btn.dataset.del);
         saveWorkouts(workouts);
 
@@ -485,6 +489,7 @@ function startSession(workoutId) {
     })),
     currentIdx: 0, resting: false, restEnd: 0, restDuration: 0, restContext: null,
   };
+  sessionWeightEditorOpen = false;
 
   dom.nav.classList.add('hidden');
   dom.session.classList.remove('hidden');
@@ -521,6 +526,156 @@ function getWeightForSet(ex, setIdx) {
   return 0;
 }
 
+function roundWeight(value) {
+  return Math.round(value * 100) / 100;
+}
+
+function formatWeight(value) {
+  const n = roundWeight(Number(value) || 0);
+  return Number.isInteger(n) ? String(n) : String(n).replace(/\.0+$/, '');
+}
+
+function ensurePerSetWeights(ex) {
+  if (!Array.isArray(ex.weights)) ex.weights = [];
+  while (ex.weights.length < ex.sets) ex.weights.push(ex.weight || 0);
+  if (ex.weights.length > ex.sets) ex.weights.length = ex.sets;
+}
+
+function persistCurrentSessionExercise() {
+  if (!session) return;
+  const ex = session.exercises[session.currentIdx];
+  if (!ex) return;
+
+  const workoutIdx = workouts.findIndex(w => w.id === session.workout.id);
+  if (workoutIdx < 0) return;
+  const savedWorkout = workouts[workoutIdx];
+  const exerciseIdx = savedWorkout.exercises.findIndex(e => e.id === ex.id);
+  if (exerciseIdx < 0) return;
+
+  const nextExercise = normalizeExercise({
+    id: ex.id,
+    name: ex.name,
+    type: ex.type,
+    sets: ex.sets,
+    reps: ex.reps,
+    rest: ex.rest,
+    duration: ex.duration,
+    weightMode: ex.weightMode,
+    weight: ex.weight,
+    weights: [...(ex.weights || [])],
+  });
+  savedWorkout.exercises[exerciseIdx] = nextExercise;
+  session.workout.exercises[exerciseIdx] = { ...nextExercise, weights: [...(nextExercise.weights || [])] };
+  session.exercises[session.currentIdx] = { ...session.exercises[session.currentIdx], ...nextExercise, completedSets: ex.completedSets, done: ex.done };
+  saveWorkouts(workouts);
+}
+
+function setSessionWeightMode(mode) {
+  if (!session) return;
+  const ex = session.exercises[session.currentIdx];
+  if (!ex || ex.type === 'timer') return;
+  if (mode === ex.weightMode) return;
+  const currentSetIdx = Math.max(0, Math.min(ex.completedSets, ex.sets - 1));
+
+  if (mode === 'perSet') {
+    let base = ex.weight || 0;
+    if (ex.weightMode === 'uniform') base = ex.weight;
+    else if (Array.isArray(ex.weights) && ex.weights.length > 0) {
+      base = ex.weights[Math.min(currentSetIdx, ex.weights.length - 1)] ?? ex.weight ?? 0;
+    }
+    ex.weights = Array(Math.max(1, ex.sets)).fill(roundWeight(Math.max(0, Number(base) || 0)));
+  } else if (mode === 'uniform') {
+    let nextWeight = ex.weight || 0;
+    if (ex.weightMode === 'perSet') {
+      ensurePerSetWeights(ex);
+      nextWeight = ex.weights[currentSetIdx] ?? ex.weight ?? 0;
+    } else if ((!nextWeight || nextWeight <= 0) && Array.isArray(ex.weights) && ex.weights.length > 0) {
+      nextWeight = ex.weights[Math.min(currentSetIdx, ex.weights.length - 1)] ?? 0;
+    }
+    ex.weight = roundWeight(Math.max(0, Number(nextWeight) || 0));
+  }
+
+  ex.weightMode = mode;
+  persistCurrentSessionExercise();
+  renderSession();
+}
+
+function adjustSessionUniformWeight(delta) {
+  if (!session) return;
+  const ex = session.exercises[session.currentIdx];
+  if (!ex || ex.type === 'timer') return;
+  ex.weight = roundWeight(Math.max(0, (Number(ex.weight) || 0) + delta));
+  persistCurrentSessionExercise();
+  renderSession();
+}
+
+function adjustSessionPerSetWeight(setIdx, delta) {
+  if (!session) return;
+  const ex = session.exercises[session.currentIdx];
+  if (!ex || ex.type === 'timer') return;
+  ensurePerSetWeights(ex);
+  ex.weights[setIdx] = roundWeight(Math.max(0, (Number(ex.weights[setIdx]) || 0) + delta));
+  persistCurrentSessionExercise();
+  renderSession();
+}
+
+function renderSessionWeightEditor(ex, isTimer) {
+  if (isTimer) {
+    dom.btnWeightEditToggle.classList.add('hidden');
+    dom.sessionWeightEditor.classList.add('hidden');
+    dom.sessionWeightModes.innerHTML = '';
+    dom.sessionWeightControls.innerHTML = '';
+    return;
+  }
+
+  dom.btnWeightEditToggle.classList.remove('hidden');
+  dom.btnWeightEditToggle.textContent = sessionWeightEditorOpen ? 'Hide Weight' : 'Edit Weight';
+  dom.sessionWeightEditor.classList.toggle('hidden', !sessionWeightEditorOpen);
+  if (!sessionWeightEditorOpen) {
+    dom.sessionWeightModes.innerHTML = '';
+    dom.sessionWeightControls.innerHTML = '';
+    return;
+  }
+
+  ensurePerSetWeights(ex);
+  dom.sessionWeightModes.innerHTML = `
+    <button class="type-btn ${ex.weightMode === 'none' ? 'active' : ''}" data-session-wmode="none">None</button>
+    <button class="type-btn ${ex.weightMode === 'uniform' ? 'active' : ''}" data-session-wmode="uniform">Same</button>
+    <button class="type-btn ${ex.weightMode === 'perSet' ? 'active' : ''}" data-session-wmode="perSet">Per Set</button>
+  `;
+
+  if (ex.weightMode === 'uniform') {
+    dom.sessionWeightControls.innerHTML = `
+      <div class="weight-uniform">
+        <div class="stepper"><button data-session-wstep data-dir="-2.5">−</button><span>${formatWeight(ex.weight)}kg</span><button data-session-wstep data-dir="2.5">+</button></div>
+      </div>
+    `;
+  } else if (ex.weightMode === 'perSet') {
+    const currentSetIdx = Math.max(0, Math.min(ex.completedSets, ex.sets - 1));
+    const currentWeight = ex.weights[currentSetIdx] ?? 0;
+    dom.sessionWeightControls.innerHTML = `
+      <div class="weight-perset">
+        <div class="weight-set-row">
+          <span class="set-label">Set ${currentSetIdx + 1}</span>
+          <div class="stepper"><button data-session-wsetstep data-si="${currentSetIdx}" data-dir="-2.5">−</button><span>${formatWeight(currentWeight)}kg</span><button data-session-wsetstep data-si="${currentSetIdx}" data-dir="2.5">+</button></div>
+        </div>
+      </div>
+    `;
+  } else {
+    dom.sessionWeightControls.innerHTML = '<p class="dim session-weight-note">Weight tracking off</p>';
+  }
+
+  dom.sessionWeightModes.querySelectorAll('[data-session-wmode]').forEach(btn => {
+    btn.addEventListener('click', () => setSessionWeightMode(btn.dataset.sessionWmode));
+  });
+  dom.sessionWeightControls.querySelectorAll('[data-session-wstep]').forEach(btn => {
+    btn.addEventListener('click', () => adjustSessionUniformWeight(parseFloat(btn.dataset.dir)));
+  });
+  dom.sessionWeightControls.querySelectorAll('[data-session-wsetstep]').forEach(btn => {
+    btn.addEventListener('click', () => adjustSessionPerSetWeight(+btn.dataset.si, parseFloat(btn.dataset.dir)));
+  });
+}
+
 function renderSession() {
   if (!session) return;
   const ex = session.exercises[session.currentIdx];
@@ -542,7 +697,7 @@ function renderSession() {
   } else {
     const currentSetIdx = Math.min(ex.completedSets, ex.sets - 1);
     const w = getWeightForSet(ex, currentSetIdx);
-    dom.exInfo.textContent = w > 0 ? `${ex.reps} reps @ ${w}kg` : `${ex.reps} reps per set`;
+    dom.exInfo.textContent = w > 0 ? `${ex.reps} reps @ ${formatWeight(w)}kg` : `${ex.reps} reps per set`;
   }
 
   // dots
@@ -558,6 +713,7 @@ function renderSession() {
 
   dom.viewExercise.classList.remove('hidden');
   dom.viewRest.classList.add('hidden');
+  renderSessionWeightEditor(ex, isTimer);
 
   const btn = $('#btn-done-set');
   if (ex.done) {
@@ -659,6 +815,14 @@ $('#btn-done-set').addEventListener('click', () => {
     startRest(ex.rest);
     showUndo(false);
   }
+});
+
+dom.btnWeightEditToggle.addEventListener('click', () => {
+  if (!session) return;
+  const ex = session.exercises[session.currentIdx];
+  if (!ex || ex.type === 'timer') return;
+  sessionWeightEditorOpen = !sessionWeightEditorOpen;
+  renderSession();
 });
 
 /* ===== REST TIMER ===== */
