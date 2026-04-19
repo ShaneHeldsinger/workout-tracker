@@ -80,9 +80,19 @@ function renderWorkoutList() {
     <div class="w-card" data-id="${w.id}">
       <div class="w-card-top">
         <h3>${esc(w.name)}</h3>
-        <button class="btn-icon del" data-del="${w.id}" aria-label="Delete">
-          <svg width="18" height="18" viewBox="-1 -1 26 26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg>
+        <button class="btn-icon menu" data-menu="${w.id}" aria-label="More options">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>
         </button>
+        <div class="w-card-menu hidden" data-menu-panel="${w.id}">
+          <button class="w-card-menu-item" data-dup="${w.id}">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+            Duplicate
+          </button>
+          <button class="w-card-menu-item danger" data-del="${w.id}">
+            <svg width="16" height="16" viewBox="-1 -1 26 26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg>
+            Delete
+          </button>
+        </div>
       </div>
       <p class="w-card-meta">${exCount} item${exCount !== 1 ? 's' : ''}</p>
       <button class="btn-start" data-id="${w.id}">Start Workout</button>
@@ -92,7 +102,7 @@ function renderWorkoutList() {
   // Tap card (not buttons) to edit
   dom.workoutList.querySelectorAll('.w-card').forEach(card => {
     card.addEventListener('click', (e) => {
-      if (e.target.closest('.btn-start') || e.target.closest('.btn-icon')) return;
+      if (e.target.closest('.btn-start') || e.target.closest('.btn-icon') || e.target.closest('.w-card-menu')) return;
       openEditor(workouts.find(w => w.id === card.dataset.id));
     });
   });
@@ -100,16 +110,48 @@ function renderWorkoutList() {
   dom.workoutList.querySelectorAll('.btn-start').forEach(btn => {
     btn.addEventListener('click', (e) => { e.stopPropagation(); startSession(btn.dataset.id); });
   });
+  // Burger menu toggle
+  dom.workoutList.querySelectorAll('[data-menu]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const id = btn.dataset.menu;
+      const panel = dom.workoutList.querySelector(`[data-menu-panel="${id}"]`);
+      const isOpen = !panel.classList.contains('hidden');
+      // Close all open menus first
+      dom.workoutList.querySelectorAll('.w-card-menu').forEach(p => p.classList.add('hidden'));
+      if (!isOpen) panel.classList.remove('hidden');
+    });
+  });
+  // Close menus when clicking outside
+  document.addEventListener('click', () => {
+    dom.workoutList.querySelectorAll('.w-card-menu').forEach(p => p.classList.add('hidden'));
+  }, { capture: true, once: false, passive: true });
+  // Duplicate buttons
+  dom.workoutList.querySelectorAll('[data-dup]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      dom.workoutList.querySelectorAll('.w-card-menu').forEach(p => p.classList.add('hidden'));
+      const original = workouts.find(w => w.id === btn.dataset.dup);
+      if (!original) return;
+      const copy = JSON.parse(JSON.stringify(original));
+      copy.id = uid();
+      copy.name = original.name + ' Copy';
+      copy.createdAt = Date.now();
+      workouts.push(copy);
+      saveWorkouts(workouts);
+      renderWorkoutList();
+      showToast('Workout duplicated');
+    });
+  });
   // Delete buttons
   dom.workoutList.querySelectorAll('[data-del]').forEach(btn => {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
+      dom.workoutList.querySelectorAll('.w-card-menu').forEach(p => p.classList.add('hidden'));
       confirmAction('Are you sure you want to delete this workout?', () => {
         workouts = workouts.filter(w => w.id !== btn.dataset.del);
         saveWorkouts(workouts);
-
         renderWorkoutList();
-
       });
     });
   });
