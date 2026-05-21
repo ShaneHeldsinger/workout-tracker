@@ -43,6 +43,7 @@ function normalizeExercise(ex) {
   if (next.type === 'timer') {
     next.sets = 1;
     next.reps = 1;
+    next.repsMin = null;
     next.rest = 0;
     next.weightMode = 'none';
     next.weight = 0;
@@ -51,6 +52,13 @@ function normalizeExercise(ex) {
     if (!next.name?.trim()) next.name = 'Timer';
   } else {
     next.duration = Math.max(5, Number(next.duration || 60));
+    // Migration: if repsMin key was absent (old data), it defaults to null via defaultExercise spread
+    // Validate repsMin if set
+    if (next.repsMin !== null && next.repsMin !== undefined) {
+      next.repsMin = Math.max(1, Math.min(Number(next.repsMin), next.reps));
+    } else {
+      next.repsMin = null;
+    }
   }
   return next;
 }
@@ -162,7 +170,7 @@ let editingId = null;
 let editorExercises = [];
 
 function defaultExercise() {
-  return { id: uid(), name: '', type: 'exercise', sets: 3, reps: 10, rest: 60, duration: 60, weightMode: 'none', weight: 0, weights: [] };
+  return { id: uid(), name: '', type: 'exercise', sets: 3, reps: 10, repsMin: null, rest: 60, duration: 60, weightMode: 'none', weight: 0, weights: [] };
 }
 
 function defaultTimer() {
@@ -231,7 +239,10 @@ function renderEditorExercises() {
         <div class="num-group"><label>Sets</label>
           <div class="stepper"><button data-step="sets" data-idx="${i}" data-dir="-1">−</button><span>${ex.sets}</span><button data-step="sets" data-idx="${i}" data-dir="1">+</button></div>
         </div>
-        <div class="num-group"><label>Reps</label>
+        <div class="num-group"><label>Min Reps</label>
+          <div class="stepper"><button data-repsmin-step="${i}" data-dir="-1">−</button><span>${ex.repsMin !== null ? ex.repsMin : '—'}</span><button data-repsmin-step="${i}" data-dir="1">+</button></div>
+        </div>
+        <div class="num-group"><label>${ex.repsMin !== null ? 'Max Reps' : 'Reps'}</label>
           <div class="stepper"><button data-step="reps" data-idx="${i}" data-dir="-1">−</button><span>${ex.reps}</span><button data-step="reps" data-idx="${i}" data-dir="1">+</button></div>
         </div>
       </div>
@@ -290,6 +301,28 @@ function bindEditorEvents() {
       const field = btn.dataset.step;
       const min = field === 'duration' ? 5 : 1;
       ex[field] = Math.max(min, ex[field] + (+btn.dataset.dir));
+      // If reps decreased below repsMin, clamp repsMin
+      if (field === 'reps' && ex.repsMin !== null && ex.repsMin > ex.reps) {
+        ex.repsMin = ex.reps;
+      }
+      renderEditorExercises();
+    });
+  });
+  el.querySelectorAll('[data-repsmin-step]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const ex = editorExercises[+btn.dataset.repsminStep];
+      const dir = +btn.dataset.dir;
+      if (ex.repsMin === null) {
+        // + enables repsMin, − does nothing
+        if (dir > 0) ex.repsMin = Math.max(1, ex.reps - 1);
+      } else {
+        const next = ex.repsMin + dir;
+        if (next < 1) {
+          ex.repsMin = null; // − below 1 clears it back to unset
+        } else {
+          ex.repsMin = Math.min(next, ex.reps); // clamp to reps max
+        }
+      }
       renderEditorExercises();
     });
   });
@@ -600,6 +633,7 @@ function persistCurrentSessionExercise() {
     type: ex.type,
     sets: ex.sets,
     reps: ex.reps,
+    repsMin: ex.repsMin,
     rest: ex.rest,
     duration: ex.duration,
     weightMode: ex.weightMode,
@@ -739,7 +773,8 @@ function renderSession() {
   } else {
     const currentSetIdx = Math.min(ex.completedSets, ex.sets - 1);
     const w = getWeightForSet(ex, currentSetIdx);
-    dom.exInfo.textContent = w > 0 ? `${ex.reps} reps @ ${formatWeight(w)}kg` : `${ex.reps} reps per set`;
+    const repStr = ex.repsMin !== null ? `${ex.repsMin}–${ex.reps}` : `${ex.reps}`;
+    dom.exInfo.textContent = w > 0 ? `${repStr} reps @ ${formatWeight(w)}kg` : `${repStr} reps per set`;
   }
 
   // dots
@@ -1001,6 +1036,7 @@ function addToHistory(completed) {
       completedSets: e.completedSets, totalSets: e.sets,
       duration: e.duration,
       reps: e.reps,
+      repsMin: e.repsMin,
       weightMode: e.weightMode, weight: e.weight, weights: e.weights,
     })),
   };
@@ -1024,7 +1060,7 @@ function renderHistory() {
       if (e.type === 'timer') {
         info = `${Math.max(5, Number(e.duration || 60))}s timer`;
       } else {
-        info = `${e.completedSets}×${e.reps}`;
+        info = `${e.completedSets}×${e.repsMin != null ? `${e.repsMin}–${e.reps}` : e.reps}`;
         if (e.weightMode === 'uniform' && e.weight > 0) info += ` @ ${e.weight}kg`;
         else if (e.weightMode === 'perSet' && e.weights?.some(w => w > 0)) {
           const unique = [...new Set(e.weights.slice(0, e.completedSets))];
