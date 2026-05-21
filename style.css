@@ -122,7 +122,7 @@ button,label,.stepper,.nav-btn,.type-btn,.rest-btn,.d-item,.w-card,.h-card{-webk
 /* number fields */
 .num-row{display:flex;gap:10px;margin-bottom:12px}
 .num-group{flex:1}
-.num-group label{display:block;font-size:12px;color:var(--dim);margin-bottom:6px;font-weight:500}
+.num-group label{display:block;font-size:12px;color:var(--dim);margin-bottom:6px;font-weight:500;white-space:nowrap}
 .stepper{display:flex;align-items:center;background:var(--surface2);border-radius:8px;overflow:hidden;border:1px solid var(--border)}
 .stepper button{width:44px;height:42px;font-size:20px;color:var(--dim);display:flex;align-items:center;justify-content:center;transition:background .1s}
 .stepper button:active{background:var(--border)}
